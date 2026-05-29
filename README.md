@@ -1,12 +1,12 @@
 # Zyxel WAX650S $4$ Encrypted Password Decrypter
 
-This repository contains a Python script to decrypt passwords encrypted with the Zyxel proprietary `$4$` scheme, commonly found in the `mfg-default.conf` configuration files of Zyxel WAX650S devices and potentially other Zyxel products.
+This repository contains a Python CLI for decrypting passwords stored with Zyxel's proprietary `$4$` scheme, commonly found in `mfg-default.conf` configuration files on Zyxel WAX650S devices and potentially other Zyxel products.
 
 ## Background
 
 The `$4$` scheme is used by Zyxel to store sensitive information, such as administrative passwords, in a reversible encrypted format rather than a one-way hash. Analysis of Zyxel firmware has revealed that this scheme utilizes **AES-192-CBC** encryption with a static key and Initialization Vector (IV) embedded within the `zysh` binary.
 
-This tool was developed based on research by HN Security [1], which detailed the firmware extraction and password analysis process for Zyxel devices.
+This tool was developed from public firmware-analysis research, then packaged here as a reusable CLI instead of a one-off hard-coded sample.
 
 ## Technical Details
 
@@ -31,29 +31,53 @@ The encryption process involves:
 - Python 3.x
 - `pycryptodome` library: `pip install pycryptodome`
 
-### Decryption
+### Input formats
 
-To decrypt a password, you need the full `$4$` string, which includes the salt and the Base64-encoded ciphertext. For example:
+The CLI accepts either:
 
-`$4$WliGKvFQ$yMEH/WCnH1+NXuIUp0lzpUinIyEnrHFoRgesi6NdOFytmQg8lRfsVzUUjBGY+FiS4Up6KIgoP8OMEP0L3hRYSN2kpFTDIet31GoNwlM+S7U$`
+- the full `$4$<salt>$<cipher>$` value
+- an entire config line containing that `$4$...$...$` fragment
+- the Base64 ciphertext alone, together with `--salt`
 
-From this string, extract the salt (`WliGKvFQ`) and the Base64-encoded value (`yMEH/WCnH1+NXuIUp0lzpUinIyEnrHFoRgesi6NdOFytmQg8lRfsVzUUjBGY+FiS4Up6KIgoP8OMEP0L3hRYSN2kpFTDIet31GoNwlM+S7U`).
-
-Then, run the `zyxel_decrypt.py` script, providing the salt and the Base64-encoded value:
+### Decrypt a full `$4$` string
 
 ```bash
-python3 zyxel_decrypt.py "WliGKvFQ" "yMEH/WCnH1+NXuIUp0lzpUinIyEnrHFoRgesi6NdOFytmQg8lRfsVzUUjBGY+FiS4Up6KIgoP8OMEP0L3hRYSN2kpFTDIet31GoNwlM+S7U"
+python3 zyxel_decrypter.py '$4$WliGKvFQ$yMEH/WCnH1+NXuIUp0lzpUinIyEnrHFoRgesi6NdOFytmQg8lRfsVzUUjBGY+FiS4Up6KIgoP8OMEP0L3hRYSN2kpFTDIet31GoNwlM+S7U$'
 ```
 
-The script will output the decrypted password.
+### Decrypt from a config line
+
+```bash
+python3 zyxel_decrypter.py 'username admin encrypted-password $4$WliGKvFQ$yMEH/WCnH1+NXuIUp0lzpUinIyEnrHFoRgesi6NdOFytmQg8lRfsVzUUjBGY+FiS4Up6KIgoP8OMEP0L3hRYSN2kpFTDIet31GoNwlM+S7U$ user-type admin'
+```
+
+### Decrypt with separate salt and ciphertext
+
+```bash
+python3 zyxel_decrypter.py 'yMEH/WCnH1+NXuIUp0lzpUinIyEnrHFoRgesi6NdOFytmQg8lRfsVzUUjBGY+FiS4Up6KIgoP8OMEP0L3hRYSN2kpFTDIet31GoNwlM+S7U' --salt WliGKvFQ
+```
+
+### Show the raw decrypted buffer
+
+```bash
+python3 zyxel_decrypter.py '$4$WliGKvFQ$yMEH/WCnH1+NXuIUp0lzpUinIyEnrHFoRgesi6NdOFytmQg8lRfsVzUUjBGY+FiS4Up6KIgoP8OMEP0L3hRYSN2kpFTDIet31GoNwlM+S7U$' --raw
+```
+
+The CLI prints the extracted salt and recovered plaintext password. `--raw` adds the full decrypted buffer for validation work.
 
 ## Example
 
-Given the input:
+Given the config line:
 
 `username admin encrypted-password $4$WliGKvFQ$yMEH/WCnH1+NXuIUp0lzpUinIyEnrHFoRgesi6NdOFytmQg8lRfsVzUUjBGY+FiS4Up6KIgoP8OMEP0L3hRYSN2kpFTDIet31GoNwlM+S7U$ user-type admin`
 
-Running the script with `salt = "WliGKvFQ"` and `value_b64 = "yMEH/WCnH1+NXuIUp0lzpUinIyEnrHFoRgesi6NdOFytmQg8lRgesi6NdOFytmQg8lRfsVzUUjBGY+FiS4Up6KIgoP8OMEP0L3hRYSN2kpFTDIet31GoNwlM+S7U"` will yield:
+Running:
+
+```bash
+python3 zyxel_decrypter.py 'username admin encrypted-password $4$WliGKvFQ$yMEH/WCnH1+NXuIUp0lzpUinIyEnrHFoRgesi6NdOFytmQg8lRfsVzUUjBGY+FiS4Up6KIgoP8OMEP0L3hRYSN2kpFTDIet31GoNwlM+S7U$ user-type admin' --raw
+```
+
+will yield:
 
 ```
 Salt: WliGKvFQ
